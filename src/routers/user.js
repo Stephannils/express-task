@@ -3,22 +3,30 @@ const User = require('../models/user');
 const auth = require('../middleware/auth');
 const multer = require('multer');
 const sharp = require('sharp');
-
+const mailer = require('../helpers/mailer');
 
 const router = new express.Router();
 
 // Create user
 router.post('/users', async (req, res) => {
   const user = new User(req.body);
+
   try {
     const token = await user.generateAuthToken();
     await user.save();
+    const data = {
+      from: process.env.EMAIL,
+      to: user.email,
+      subject: 'Hello from your taskmanager team',
+      text: 'Your account was successfully created!',
+    };
+
+    mailer(data);
     res.status(201).send({user, token});
   } catch (err) {
     res.status(400).send(err);
   }
 });
-
 
 // Login user
 router.post('/users/login', async (req, res) => {
@@ -26,6 +34,7 @@ router.post('/users/login', async (req, res) => {
     const user = await User.
         findByCredentials(req.body.email, req.body.password);
     const token = await user.generateAuthToken();
+
     res.send({user, token});
   } catch (err) {
     res.status(400).send();
@@ -64,6 +73,7 @@ router.delete('/users/me/avatar', auth, async (req, res) => {
   if (!req.user.avatar) {
     res.status(400).send({error: 'No avatar to delete'});
   }
+
   try {
     req.user.avatar = undefined;
     await req.user.save();
@@ -77,9 +87,11 @@ router.delete('/users/me/avatar', auth, async (req, res) => {
 router.get('/users/:id/avatar', async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
+
     if (!user || !user.avatar) {
       return res.status(404).send();
     }
+
     res.set('Content-Type', 'image/png').send(user.avatar);
   } catch (err) {
     res.status(500).send();
@@ -105,7 +117,6 @@ router.post('/users/logout', auth, async (req, res) => {
 router.post('/users/logout/all', auth, async (req, res) => {
   try {
     req.user.tokens = [];
-
     await req.user.save();
     res.send();
   } catch (err) {
@@ -132,9 +143,16 @@ router.patch('/users/me', auth, async (req, res) => {
 
   try {
     updates.forEach((update) => req.user[update] = req.body[update]);
-
     await req.user.save();
 
+    const data = {
+      from: process.env.EMAIL,
+      to: req.user.email,
+      subject: 'Hello from your taskmanager team',
+      text: 'Your account was successfully updated!',
+    };
+
+    mailer(data);
     res.send(req.user);
   } catch (err) {
     res.status(400).send(err);
@@ -147,6 +165,14 @@ router.delete('/users/me', auth, async (req, res) => {
   try {
     await req.user.remove();
 
+    const data = {
+      from: process.env.EMAIL,
+      to: req.user.email,
+      subject: 'Hello from your taskmanager team',
+      text: 'Your account was successfully deleted!',
+    };
+
+    mailer(data);
     res.send(req.user);
   } catch (err) {
     res.status(500).send();
